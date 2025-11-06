@@ -1,0 +1,441 @@
+<SongListScreen>:
+    MDNavigationLayout:
+        
+        MDScreenManager:
+            MDScreen:
+                MDBoxLayout:
+                    orientation: "vertical"
+                    md_bg_color: app.theme_cls.bg_normal
+                    
+                    # Header con título y menú hamburguesa
+                    MDTopAppBar:
+                        title: "Lista de Canciones"
+                        elevation: 2
+                        left_action_items: [["menu", lambda x: nav_drawer.set_state("open")]]
+                        right_action_items: [["music-note", lambda x: None]]
+                    
+                    # Lista de canciones
+                    RecycleView:
+                        id: song_list
+                        viewclass: "SongItem"
+                        bar_width: dp(4)
+                        bar_color: app.theme_cls.primary_color
+                        
+                        RecycleBoxLayout:
+                            orientation: 'vertical'
+                            default_size: None, dp(60)
+                            default_size_hint: 1, None
+                            size_hint_y: None
+                            height: self.minimum_height
+                            spacing: dp(2)
+                            padding: dp(8)
+        
+        # Navigation Drawer (Menú lateral)
+        MDNavigationDrawer:
+            id: nav_drawer
+            radius: (0, dp(16), dp(16), 0)
+            
+            MDNavigationDrawerMenu:
+                
+                MDNavigationDrawerHeader:
+                    title: "Music Player"
+                    title_color: 1, 1, 1, 1
+                    text: "by Tu Nombre"
+                    spacing: dp(4)
+                    padding: [0, dp(48), 0, dp(12)]
+                    
+                MDNavigationDrawerItem:
+                    icon: "cog"
+                    text: "Ajustes"
+                    on_release: 
+                        root.open_settings()
+                        nav_drawer.set_state("close")
+                
+                MDNavigationDrawerItem:
+                    icon: "download"
+                    text: "Music Downloader"
+                    on_release: 
+                        root.open_downloader()
+                        nav_drawer.set_state("close")
+                
+                MDNavigationDrawerDivider:
+                
+                MDNavigationDrawerItem:
+                    icon: "information"
+                    text: "Acerca de"
+                    on_release: 
+                        root.show_about()
+                        nav_drawer.set_state("close")
+
+# Item personalizado para cada canción
+<SongItem>:
+    text: ""
+    song_path: ""
+    callback: None
+    orientation: 'horizontal'
+    size_hint_y: None
+    height: dp(60)
+    elevation: 1
+    ripple_behavior: True
+    radius: [dp(8)]
+    padding: dp(12)
+    spacing: dp(12)
+    on_release: root.on_release()
+    
+    MDIconButton:
+        icon: "music-circle"
+        theme_icon_color: "Custom"
+        icon_color: app.theme_cls.primary_color
+        size_hint_x: None
+        width: dp(40)
+        disabled: True
+    
+    MDLabel:
+        text: root.text
+        theme_text_color: "Primary"
+        font_style: "Body1"
+    
+    MDIconButton:
+        icon: "play-circle"
+        theme_icon_color: "Custom"
+        icon_color: app.theme_cls.primary_color
+        size_hint_x: None
+        width: dp(40)
+        disabled: True
+
+<PlayerScreen>:
+    MDBoxLayout:
+        orientation: 'vertical'
+        md_bg_color: app.theme_cls.bg_normal
+        
+        # Barra superior con botón de volver
+        MDTopAppBar:
+            title: "Reproduciendo"
+            elevation: 2
+            left_action_items: [["arrow-left", lambda x: root.go_back()]]
+        
+        # Contenido principal
+        MDBoxLayout:
+            orientation: 'vertical'
+            padding: dp(16)
+            spacing: dp(12)
+            
+            # Espaciador superior flexible
+            Widget:
+                size_hint_y: 0.05
+            
+            # Artwork placeholder (más pequeño y responsivo)
+            MDCard:
+                size_hint: None, None
+                size: min(dp(220), self.parent.width * 0.6), min(dp(220), self.parent.width * 0.6)
+                pos_hint: {'center_x': 0.5}
+                elevation: 6
+                radius: [dp(12)]
+                md_bg_color: app.theme_cls.primary_color
+                
+                MDFloatLayout:
+                    MDIcon:
+                        icon: "music"
+                        font_size: min(dp(80), self.parent.width * 0.35)
+                        theme_text_color: "Custom"
+                        text_color: 1, 1, 1, 0.9
+                        pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+            
+            # Espaciador
+            Widget:
+                size_hint_y: 0.05
+            
+            # Nombre de la canción (con scroll si es muy largo)
+            ScrollView:
+                size_hint_y: None
+                height: dp(40)
+                do_scroll_x: False
+                do_scroll_y: False
+                
+                MDLabel:
+                    text: root.current_song if root.current_song else "Sin canción"
+                    halign: 'center'
+                    font_style: 'H6'
+                    theme_text_color: "Primary"
+                    size_hint_y: None
+                    height: self.texture_size[1]
+                    text_size: self.width, None
+            
+            # Espaciador
+            Widget:
+                size_hint_y: 0.05
+            
+            # Slider con tiempos
+            MDBoxLayout:
+                orientation: 'horizontal'
+                size_hint_y: None
+                height: dp(32)
+                spacing: dp(8)
+                
+                MDLabel:
+                    text: root.current_time_text
+                    size_hint_x: None
+                    width: dp(45)
+                    halign: 'center'
+                    theme_text_color: "Secondary"
+                    font_style: "Caption"
+                
+                MDSlider:
+                    id: progress_slider
+                    min: 0
+                    max: 1
+                    value: root.slider_value
+                    color: app.theme_cls.primary_color
+                    on_touch_down: 
+                        if self.collide_point(*args[1].pos): root.on_slider_touch_down()
+                    on_touch_up:
+                        if self.collide_point(*args[1].pos): root.on_slider_touch_up(self.value)
+                
+                MDLabel:
+                    text: root.duration_text
+                    size_hint_x: None
+                    width: dp(45)
+                    halign: 'center'
+                    theme_text_color: "Secondary"
+                    font_style: "Caption"
+            
+            # Espaciador
+            Widget:
+                size_hint_y: 0.1
+            
+            # Botones de control principales
+            MDBoxLayout:
+                orientation: 'horizontal'
+                size_hint_y: None
+                height: dp(64)
+                spacing: dp(16)
+                pos_hint: {'center_x': 0.5}
+                
+                Widget:
+                
+                MDIconButton:
+                    icon: "skip-previous"
+                    icon_size: dp(32)
+                    theme_icon_color: "Custom"
+                    icon_color: app.theme_cls.primary_color
+                    on_press: root.prev_song()
+                
+                MDIconButton:
+                    icon: "play-circle" if root.is_paused else "pause-circle"
+                    icon_size: dp(56)
+                    theme_icon_color: "Custom"
+                    icon_color: app.theme_cls.primary_color
+                    on_press: root.play_pause()
+                
+                MDIconButton:
+                    icon: "skip-next"
+                    icon_size: dp(32)
+                    theme_icon_color: "Custom"
+                    icon_color: app.theme_cls.primary_color
+                    on_press: root.next_song()
+                
+                Widget:
+            
+            # Botones shuffle y repeat
+            MDBoxLayout:
+                orientation: 'horizontal'
+                size_hint_y: None
+                height: dp(40)
+                spacing: dp(24)
+                pos_hint: {'center_x': 0.5}
+                
+                Widget:
+                
+                MDIconButton:
+                    icon: "shuffle-variant"
+                    icon_size: dp(24)
+                    theme_icon_color: "Custom"
+                    icon_color: app.theme_cls.primary_color if root.shuffle else app.theme_cls.disabled_hint_text_color
+                    on_press: root.shuffle = not root.shuffle
+                
+                MDIconButton:
+                    icon: "repeat"
+                    icon_size: dp(24)
+                    theme_icon_color: "Custom"
+                    icon_color: app.theme_cls.primary_color if root.repeat else app.theme_cls.disabled_hint_text_color
+                    on_press: root.repeat = not root.repeat
+                
+                Widget:
+            
+            # Espaciador inferior flexible
+            Widget:
+                size_hint_y: 0.1
+
+<SettingsScreen>:
+    MDBoxLayout:
+        orientation: 'vertical'
+        md_bg_color: app.theme_cls.bg_normal
+        
+        MDTopAppBar:
+            title: "Ajustes"
+            elevation: 2
+            left_action_items: [["arrow-left", lambda x: root.go_back()]]
+        
+        ScrollView:
+            MDBoxLayout:
+                orientation: 'vertical'
+                padding: dp(16)
+                spacing: dp(16)
+                adaptive_height: True
+                
+                # Sección: Carpeta de música
+                MDLabel:
+                    text: "Carpeta de Música"
+                    font_style: "H6"
+                    size_hint_y: None
+                    height: self.texture_size[1]
+                
+                MDCard:
+                    orientation: 'vertical'
+                    padding: dp(16)
+                    spacing: dp(12)
+                    size_hint_y: None
+                    height: dp(100)
+                    elevation: 2
+                    
+                    MDLabel:
+                        text: root.music_folder if root.music_folder else "No seleccionada"
+                        theme_text_color: "Secondary"
+                        font_style: "Body2"
+                    
+                    MDRaisedButton:
+                        text: "Seleccionar carpeta"
+                        pos_hint: {'center_x': 0.5}
+                        on_release: root.open_file_manager()
+                
+                # Sección: Tema
+                MDLabel:
+                    text: "Apariencia"
+                    font_style: "H6"
+                    size_hint_y: None
+                    height: self.texture_size[1]
+                
+                MDCard:
+                    orientation: 'vertical'
+                    padding: dp(16)
+                    spacing: dp(12)
+                    size_hint_y: None
+                    height: dp(120)
+                    elevation: 2
+                    
+                    MDLabel:
+                        text: "Tema"
+                        theme_text_color: "Primary"
+                    
+                    MDBoxLayout:
+                        spacing: dp(12)
+                        size_hint_y: None
+                        height: dp(48)
+                        
+                        MDRaisedButton:
+                            text: "Claro"
+                            on_release: root.change_theme("Light")
+                        
+                        MDRaisedButton:
+                            text: "Oscuro"
+                            on_release: root.change_theme("Dark")
+                
+                # Sección: Color primario
+                MDCard:
+                    orientation: 'vertical'
+                    padding: dp(16)
+                    spacing: dp(12)
+                    size_hint_y: None
+                    height: dp(180)
+                    elevation: 2
+                    
+                    MDLabel:
+                        text: "Color Principal"
+                        theme_text_color: "Primary"
+                    
+                    MDGridLayout:
+                        cols: 4
+                        spacing: dp(8)
+                        size_hint_y: None
+                        height: dp(100)
+                        
+                        MDRaisedButton:
+                            text: "Azul"
+                            md_bg_color: 0.13, 0.59, 0.95, 1
+                            on_release: root.change_primary_color("Blue")
+                        
+                        MDRaisedButton:
+                            text: "Rojo"
+                            md_bg_color: 0.96, 0.26, 0.21, 1
+                            on_release: root.change_primary_color("Red")
+                        
+                        MDRaisedButton:
+                            text: "Verde"
+                            md_bg_color: 0.30, 0.69, 0.31, 1
+                            on_release: root.change_primary_color("Green")
+                        
+                        MDRaisedButton:
+                            text: "Púrpura"
+                            md_bg_color: 0.61, 0.15, 0.69, 1
+                            on_release: root.change_primary_color("Purple")
+
+<DownloaderScreen>:
+    MDBoxLayout:
+        orientation: 'vertical'
+        md_bg_color: app.theme_cls.bg_normal
+        
+        MDTopAppBar:
+            title: "Music Downloader"
+            elevation: 2
+            left_action_items: [["arrow-left", lambda x: root.go_back()]]
+        
+        MDBoxLayout:
+            orientation: 'vertical'
+            padding: dp(24)
+            spacing: dp(20)
+            
+            Widget:
+                size_hint_y: 0.2
+            
+            MDIcon:
+                icon: "download-circle"
+                font_size: dp(80)
+                theme_text_color: "Custom"
+                text_color: app.theme_cls.primary_color
+                halign: 'center'
+                size_hint_y: None
+                height: dp(80)
+            
+            MDLabel:
+                text: "Descarga música desde YouTube"
+                halign: 'center'
+                font_style: "H6"
+                size_hint_y: None
+                height: dp(40)
+            
+            MDTextField:
+                id: url_field
+                hint_text: "Pega la URL de YouTube aquí"
+                helper_text: "Ejemplo: https://youtube.com/watch?v=..."
+                helper_text_mode: "on_focus"
+                mode: "rectangle"
+                size_hint_y: None
+                height: dp(56)
+                text: root.url_input
+                on_text: root.url_input = self.text
+            
+            MDRaisedButton:
+                text: "Descargar" if not root.is_downloading else "Descargando..."
+                pos_hint: {'center_x': 0.5}
+                disabled: root.is_downloading
+                on_release: root.start_download(url_field.text)
+            
+            MDLabel:
+                text: root.download_status
+                halign: 'center'
+                theme_text_color: "Secondary"
+                size_hint_y: None
+                height: dp(30)
+            
+            Widget:
+                size_hint_y: 1
