@@ -25,35 +25,103 @@ jobs:
           sudo apt update
           sudo apt install -y python3-pip openjdk-17-jdk unzip zip git \
             libffi-dev libssl-dev autoconf automake libtool pkg-config \
-            zlib1g-dev libncurses5-dev libtinfo5 expect
+            zlib1g-dev libncurses5-dev libtinfo5
 
       - name: Install Buildozer
         run: |
           pip install --upgrade pip setuptools wheel
           pip install buildozer cython==0.29.36 virtualenv
 
-      - name: Build APK with auto-accept licenses
+      - name: Setup Android SDK with pre-accepted licenses
         run: |
-          # Crear script expect para aceptar automáticamente las licencias
-          cat > accept_licenses.exp << 'EOF'
-          #!/usr/bin/expect -f
-          set timeout -1
-          spawn buildozer -v android debug
+          set -e
           
-          expect {
-            "Accept? (y/N):" {
-              send "y\r"
-              exp_continue
-            }
-            eof
-          }
+          # Inicializar buildozer para que cree la estructura
+          buildozer init || true
+          
+          # Forzar primera ejecución para descargar SDK
+          timeout 180 buildozer android update || true
+          
+          # Esperar a que se cree el directorio
+          sleep 5
+          
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+          
+          # Verificar si existe el SDK
+          if [ -d "$SDK_ROOT" ]; then
+            echo "SDK encontrado en $SDK_ROOT"
+            
+            # Crear directorio de licencias
+            mkdir -p "$SDK_ROOT/licenses"
+            
+            # Escribir TODOS los hashes de licencias
+            echo -e "24333f8a63b6825ea9c5514f83c2829b004d1fee\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$SDK_ROOT/licenses/android-sdk-license"
+            echo -e "84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9f4b1727b84351f2910" > "$SDK_ROOT/licenses/android-sdk-preview-license"
+            echo "d975f751698a77b662f1254ddbeed3901e976f5a" > "$SDK_ROOT/licenses/intel-android-extra-license"
+            
+            # Buscar sdkmanager (puede estar en tools o cmdline-tools)
+            SDKMANAGER=""
+            if [ -f "$SDK_ROOT/tools/bin/sdkmanager" ]; then
+              SDKMANAGER="$SDK_ROOT/tools/bin/sdkmanager"
+            elif [ -f "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+              SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+            fi
+            
+            if [ -n "$SDKMANAGER" ]; then
+              echo "Usando sdkmanager: $SDKMANAGER"
+              
+              # Aceptar licencias con yes pipe (MÚLTIPLES MÉTODOS)
+              yes 2>/dev/null | "$SDKMANAGER" --licenses --sdk_root="$SDK_ROOT" || true
+              echo "y" | "$SDKMANAGER" --licenses --sdk_root="$SDK_ROOT" || true
+              printf 'y\ny\ny\ny\ny\ny\ny\n' | "$SDKMANAGER" --licenses --sdk_root="$SDK_ROOT" || true
+              
+              # Instalar build-tools 34.0.0 (versión estable)
+              "$SDKMANAGER" --sdk_root="$SDK_ROOT" "build-tools;34.0.0" "platform-tools" "platforms;android-33" || true
+            fi
+            
+            echo "Contenido de licenses:"
+            ls -la "$SDK_ROOT/licenses/" || echo "No licenses dir"
+            
+            echo "Build-tools instalados:"
+            ls -la "$SDK_ROOT/build-tools/" || echo "No build-tools yet"
+          else
+            echo "ADVERTENCIA: SDK no encontrado aún"
+          fi
+
+      - name: Patch buildozer.spec to use build-tools 34.0.0
+        run: |
+          # Agregar configuraciones específicas al buildozer.spec
+          cat >> buildozer.spec << 'EOF'
+          
+          # Configuración forzada para CI/CD
+          android.accept_sdk_license = True
+          android.api = 33
+          android.minapi = 21
+          android.ndk = 25b
+          android.ndk_api = 21
           EOF
           
-          chmod +x accept_licenses.exp
-          ./accept_licenses.exp
+          echo "=== buildozer.spec modificado ==="
+          tail -10 buildozer.spec
+
+      - name: Build APK (final attempt)
+        run: |
+          export ANDROID_SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          
+          # Ejecutar con verbose para ver el error exacto
+          buildozer -v android debug
 
       - name: Upload APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ReginaMusic-APK
           path: bin/*.apk
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: .buildozer/
