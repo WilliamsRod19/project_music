@@ -25,122 +25,48 @@ jobs:
           sudo apt update
           sudo apt install -y python3-pip openjdk-17-jdk unzip zip git \
             libffi-dev libssl-dev autoconf automake libtool pkg-config \
-            zlib1g-dev libncurses5-dev libtinfo5 wget
+            zlib1g-dev libncurses5-dev libtinfo5
 
       - name: Install Buildozer
         run: |
           pip install --upgrade pip setuptools wheel
           pip install buildozer cython==0.29.36 virtualenv
 
-      - name: Cache Buildozer directories
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.buildozer
-          key: buildozer-${{ hashFiles('buildozer.spec') }}
-
-      - name: Setup complete Android environment
+      - name: Pre-accept Android SDK licenses
         run: |
-          set -e
+          # Buildozer ejecutará y descargará el SDK, pero interceptamos las licencias
+          # Ejecutar buildozer por primera vez para que descargue el SDK
+          buildozer android update || true
           
-          # Crear estructura de directorios
-          mkdir -p $HOME/.buildozer/android/platform
-          cd $HOME/.buildozer/android/platform
+          # Ahora crear los archivos de licencia
+          SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
+          mkdir -p $SDK_ROOT/licenses
           
-          # Descargar Android Command Line Tools
-          echo "Descargando Android SDK..."
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip -q commandlinetools-linux-9477386_latest.zip
-          rm commandlinetools-linux-9477386_latest.zip
+          # Escribir todos los hashes de licencias conocidos
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $SDK_ROOT/licenses/android-sdk-license
+          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" >> $SDK_ROOT/licenses/android-sdk-license
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" >> $SDK_ROOT/licenses/android-sdk-license
           
-          # Configurar estructura correcta
-          mkdir -p android-sdk/cmdline-tools
-          mv cmdline-tools android-sdk/cmdline-tools/latest
+          echo "84831b9409646a918e30573bab4c9c91346d8abd" > $SDK_ROOT/licenses/android-sdk-preview-license
+          echo "504667f4c0de7af1a06de9f4b1727b84351f2910" >> $SDK_ROOT/licenses/android-sdk-preview-license
           
-          # Descargar NDK
-          echo "Descargando Android NDK..."
-          wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
-          unzip -q android-ndk-r25b-linux.zip
-          mv android-ndk-r25b android-ndk-r25b
-          rm android-ndk-r25b-linux.zip
+          echo "d975f751698a77b662f1254ddbeed3901e976f5a" > $SDK_ROOT/licenses/intel-android-extra-license
           
-          # Variables de entorno
-          export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
-          export ANDROID_NDK_HOME=$HOME/.buildozer/android/platform/android-ndk-r25b
-          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
+          echo "33b6a2b64607f11b759f320ef9dff4ae5c47d97a" > $SDK_ROOT/licenses/google-gdk-license
           
-          # Pre-aceptar TODAS las licencias
-          mkdir -p $ANDROID_SDK_ROOT/licenses
+          echo "e9acab5b5fbb560a72cfaecce8946896ff6aab9d" > $SDK_ROOT/licenses/mips-android-sysimage-license
           
-          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
-          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" >> $ANDROID_SDK_ROOT/licenses/android-sdk-license
-          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" >> $ANDROID_SDK_ROOT/licenses/android-sdk-license
-          
-          echo "84831b9409646a918e30573bab4c9c91346d8abd" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
-          echo "504667f4c0de7af1a06de9f4b1727b84351f2910" >> $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
-          
-          echo "d975f751698a77b662f1254ddbeed3901e976f5a" > $ANDROID_SDK_ROOT/licenses/intel-android-extra-license
-          
-          # Aceptar licencias con sdkmanager
-          yes | sdkmanager --licenses 2>&1 || true
-          
-          # Instalar componentes necesarios del SDK
-          echo "Instalando componentes del SDK..."
-          sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;34.0.0" 2>&1 || true
-          
-          # Verificar instalación
-          echo "SDK instalado en:"
-          ls -la $ANDROID_SDK_ROOT/
-          echo "Build-tools disponibles:"
-          ls -la $ANDROID_SDK_ROOT/build-tools/ 2>/dev/null || echo "No build-tools aún"
+          # Verificar que se crearon
+          echo "Licencias creadas:"
+          ls -la $SDK_ROOT/licenses/
+          cat $SDK_ROOT/licenses/android-sdk-license
 
-      - name: Configure buildozer.spec
+      - name: Build APK
         run: |
-          # Forzar rutas específicas en buildozer.spec
-          cat >> buildozer.spec << EOF
-          
-          # Rutas forzadas para CI
-          android.accept_sdk_license = True
-          android.sdk_path = $HOME/.buildozer/android/platform/android-sdk
-          android.ndk_path = $HOME/.buildozer/android/platform/android-ndk-r25b
-          android.skip_update = False
-          android.api = 33
-          android.minapi = 21
-          android.ndk = 25b
-          android.ndk_api = 21
-          EOF
-          
-          echo "Configuración de buildozer.spec:"
-          tail -15 buildozer.spec
-
-      - name: Build APK with pre-configured environment
-        env:
-          ANDROID_SDK_ROOT: ${{ github.workspace }}/../.buildozer/android/platform/android-sdk
-          ANDROID_NDK_HOME: ${{ github.workspace }}/../.buildozer/android/platform/android-ndk-r25b
-          ANDROID_HOME: ${{ github.workspace }}/../.buildozer/android/platform/android-sdk
-        run: |
-          export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
-          export ANDROID_NDK_HOME=$HOME/.buildozer/android/platform/android-ndk-r25b
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
-          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
-          
-          # Mostrar variables de entorno para debug
-          echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
-          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
-          
-          # Ejecutar buildozer
           buildozer -v android debug
 
       - name: Upload APK artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ReginaMusic-APK
           path: bin/*.apk
-
-      - name: Upload build logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: buildozer-logs
-          path: .buildozer/android/platform/build-*/
