@@ -32,70 +32,63 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install buildozer cython==0.29.36 virtualenv
 
-      - name: Create buildozer.spec if not exists
+      - name: Enable SDK license acceptance in buildozer.spec
         run: |
-          if [ ! -f buildozer.spec ]; then
-            buildozer init
-          fi
-
-      - name: Configure buildozer.spec for build-tools version
-        run: |
-          # Modificar buildozer.spec para usar build-tools 34.0.0
-          sed -i 's/^#android.sdk_path.*/android.sdk_path = ~\/.buildozer\/android\/platform\/android-sdk/' buildozer.spec
-          sed -i 's/^#android.ndk_path.*/android.ndk_path = ~\/.buildozer\/android\/platform\/android-ndk-r25b/' buildozer.spec
+          # Descomentar y habilitar la aceptación automática de licencias
+          sed -i 's/^# android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
           
-          # Buscar y reemplazar la línea de android.accept_sdk_license
-          if grep -q "^#android.accept_sdk_license" buildozer.spec; then
-            sed -i 's/^#android.accept_sdk_license.*/android.accept_sdk_license = True/' buildozer.spec
-          else
-            echo "android.accept_sdk_license = True" >> buildozer.spec
+          # Si la línea no existe o está diferente, agregarla
+          if ! grep -q "^android.accept_sdk_license = True" buildozer.spec; then
+            sed -i '/\[app\]/a android.accept_sdk_license = True' buildozer.spec
           fi
           
-          # Agregar o modificar la versión de build-tools
-          if grep -q "android.gradle_dependencies" buildozer.spec; then
-            sed -i 's/^#android.gradle_dependencies.*/android.gradle_dependencies = com.android.tools.build:gradle:7.0.0/' buildozer.spec
-          else
-            echo "android.gradle_dependencies = com.android.tools.build:gradle:7.0.0" >> buildozer.spec
-          fi
+          echo "Configuración actualizada en buildozer.spec:"
+          grep "android.accept_sdk_license" buildozer.spec || echo "android.accept_sdk_license = True agregado"
 
-      - name: Setup Android SDK and accept ALL licenses
+      - name: Setup Android SDK manually
         run: |
-          # Crear directorio base
+          # Crear directorios
           mkdir -p $HOME/.buildozer/android/platform
           cd $HOME/.buildozer/android/platform
           
-          # Descargar Command Line Tools
+          # Descargar y configurar Command Line Tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           unzip -q commandlinetools-linux-9477386_latest.zip
           mkdir -p android-sdk/cmdline-tools
           mv cmdline-tools android-sdk/cmdline-tools/latest
           
-          # Configurar variables de entorno
+          # Variables de entorno
           export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
           export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin
           
-          # Aceptar TODAS las licencias (incluyendo futuras)
+          # Crear directorios de licencias y pre-aceptar TODAS
+          mkdir -p $ANDROID_SDK_ROOT/licenses
+          
+          # Aceptar todas las licencias conocidas escribiendo directamente en los archivos
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
+          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" >> $ANDROID_SDK_ROOT/licenses/android-sdk-license
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" >> $ANDROID_SDK_ROOT/licenses/android-sdk-license
+          
+          echo "84831b9409646a918e30573bab4c9c91346d8abd" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
+          echo "504667f4c0de7af1a06de9f4b1727b84351f2910" >> $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
+          
+          echo "d975f751698a77b662f1254ddbeed3901e976f5a" > $ANDROID_SDK_ROOT/licenses/intel-android-extra-license
+          
+          # Intentar aceptar con sdkmanager también (por si acaso)
           yes | sdkmanager --licenses || true
           
-          # Instalar múltiples versiones de build-tools para cubrir todas las bases
-          sdkmanager "platform-tools" "build-tools;34.0.0" "build-tools;33.0.2" "platforms;android-33"
+          # Instalar herramientas necesarias
+          sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-33" || true
           
-          # Crear enlace simbólico para build-tools si buildozer busca una versión específica
-          cd $ANDROID_SDK_ROOT/build-tools
-          if [ ! -d "36.1.0" ]; then
-            ln -s 34.0.0 36.1.0
-          fi
-          
-          echo "Build-tools instalados:"
-          ls -la $ANDROID_SDK_ROOT/build-tools/
+          echo "Licencias instaladas:"
+          ls -la $ANDROID_SDK_ROOT/licenses/
 
-      - name: Build APK with environment variables
+      - name: Build APK
         run: |
           export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
           export ANDROIDSDK=$ANDROID_SDK_ROOT
           export ANDROID_HOME=$ANDROID_SDK_ROOT
           
-          # Ejecutar buildozer en modo verbose para ver qué está pasando
           buildozer -v android debug
 
       - name: Upload APK artifact
