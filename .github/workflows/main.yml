@@ -25,45 +25,32 @@ jobs:
           sudo apt update
           sudo apt install -y python3-pip openjdk-17-jdk unzip zip git \
             libffi-dev libssl-dev autoconf automake libtool pkg-config \
-            zlib1g-dev libncurses5-dev libtinfo5
+            zlib1g-dev libncurses5-dev libtinfo5 expect
 
       - name: Install Buildozer
         run: |
           pip install --upgrade pip setuptools wheel
           pip install buildozer cython==0.29.36 virtualenv
 
-      - name: Pre-accept Android SDK licenses
+      - name: Build APK with auto-accept licenses
         run: |
-          # Buildozer ejecutará y descargará el SDK, pero interceptamos las licencias
-          # Ejecutar buildozer por primera vez para que descargue el SDK
-          buildozer android update || true
+          # Crear script expect para aceptar automáticamente las licencias
+          cat > accept_licenses.exp << 'EOF'
+          #!/usr/bin/expect -f
+          set timeout -1
+          spawn buildozer -v android debug
           
-          # Ahora crear los archivos de licencia
-          SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
-          mkdir -p $SDK_ROOT/licenses
+          expect {
+            "Accept? (y/N):" {
+              send "y\r"
+              exp_continue
+            }
+            eof
+          }
+          EOF
           
-          # Escribir todos los hashes de licencias conocidos
-          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $SDK_ROOT/licenses/android-sdk-license
-          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" >> $SDK_ROOT/licenses/android-sdk-license
-          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" >> $SDK_ROOT/licenses/android-sdk-license
-          
-          echo "84831b9409646a918e30573bab4c9c91346d8abd" > $SDK_ROOT/licenses/android-sdk-preview-license
-          echo "504667f4c0de7af1a06de9f4b1727b84351f2910" >> $SDK_ROOT/licenses/android-sdk-preview-license
-          
-          echo "d975f751698a77b662f1254ddbeed3901e976f5a" > $SDK_ROOT/licenses/intel-android-extra-license
-          
-          echo "33b6a2b64607f11b759f320ef9dff4ae5c47d97a" > $SDK_ROOT/licenses/google-gdk-license
-          
-          echo "e9acab5b5fbb560a72cfaecce8946896ff6aab9d" > $SDK_ROOT/licenses/mips-android-sysimage-license
-          
-          # Verificar que se crearon
-          echo "Licencias creadas:"
-          ls -la $SDK_ROOT/licenses/
-          cat $SDK_ROOT/licenses/android-sdk-license
-
-      - name: Build APK
-        run: |
-          buildozer -v android debug
+          chmod +x accept_licenses.exp
+          ./accept_licenses.exp
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
