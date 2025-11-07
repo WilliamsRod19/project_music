@@ -32,6 +32,11 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install buildozer cython==0.29.36 virtualenv
 
+      - name: Debug — List files
+        run: |
+          pwd
+          ls -la
+
       - name: Build APK
         run: |
           buildozer android debug
