@@ -25,46 +25,53 @@ jobs:
           sudo apt update
           sudo apt install -y python3-pip openjdk-17-jdk unzip zip git \
             libffi-dev libssl-dev autoconf automake libtool pkg-config \
-            zlib1g-dev libncurses5-dev libtinfo5
+            zlib1g-dev libncurses5-dev libtinfo5 wget
 
       - name: Install Buildozer
         run: |
           pip install --upgrade pip setuptools wheel
           pip install buildozer cython==0.29.36 virtualenv
 
-      - name: Enable SDK license acceptance in buildozer.spec
-        run: |
-          # Descomentar y habilitar la aceptación automática de licencias
-          sed -i 's/^# android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
-          
-          # Si la línea no existe o está diferente, agregarla
-          if ! grep -q "^android.accept_sdk_license = True" buildozer.spec; then
-            sed -i '/\[app\]/a android.accept_sdk_license = True' buildozer.spec
-          fi
-          
-          echo "Configuración actualizada en buildozer.spec:"
-          grep "android.accept_sdk_license" buildozer.spec || echo "android.accept_sdk_license = True agregado"
+      - name: Cache Buildozer directories
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.buildozer
+          key: buildozer-${{ hashFiles('buildozer.spec') }}
 
-      - name: Setup Android SDK manually
+      - name: Setup complete Android environment
         run: |
-          # Crear directorios
+          set -e
+          
+          # Crear estructura de directorios
           mkdir -p $HOME/.buildozer/android/platform
           cd $HOME/.buildozer/android/platform
           
-          # Descargar y configurar Command Line Tools
+          # Descargar Android Command Line Tools
+          echo "Descargando Android SDK..."
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           unzip -q commandlinetools-linux-9477386_latest.zip
+          rm commandlinetools-linux-9477386_latest.zip
+          
+          # Configurar estructura correcta
           mkdir -p android-sdk/cmdline-tools
           mv cmdline-tools android-sdk/cmdline-tools/latest
           
+          # Descargar NDK
+          echo "Descargando Android NDK..."
+          wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+          unzip -q android-ndk-r25b-linux.zip
+          mv android-ndk-r25b android-ndk-r25b
+          rm android-ndk-r25b-linux.zip
+          
           # Variables de entorno
           export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
-          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin
+          export ANDROID_NDK_HOME=$HOME/.buildozer/android/platform/android-ndk-r25b
+          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
           
-          # Crear directorios de licencias y pre-aceptar TODAS
+          # Pre-aceptar TODAS las licencias
           mkdir -p $ANDROID_SDK_ROOT/licenses
           
-          # Aceptar todas las licencias conocidas escribiendo directamente en los archivos
           echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
           echo "d56f5187479451eabf01fb78af6dfcb131a6481e" >> $ANDROID_SDK_ROOT/licenses/android-sdk-license
           echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" >> $ANDROID_SDK_ROOT/licenses/android-sdk-license
@@ -74,25 +81,66 @@ jobs:
           
           echo "d975f751698a77b662f1254ddbeed3901e976f5a" > $ANDROID_SDK_ROOT/licenses/intel-android-extra-license
           
-          # Intentar aceptar con sdkmanager también (por si acaso)
-          yes | sdkmanager --licenses || true
+          # Aceptar licencias con sdkmanager
+          yes | sdkmanager --licenses 2>&1 || true
           
-          # Instalar herramientas necesarias
-          sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-33" || true
+          # Instalar componentes necesarios del SDK
+          echo "Instalando componentes del SDK..."
+          sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;34.0.0" 2>&1 || true
           
-          echo "Licencias instaladas:"
-          ls -la $ANDROID_SDK_ROOT/licenses/
+          # Verificar instalación
+          echo "SDK instalado en:"
+          ls -la $ANDROID_SDK_ROOT/
+          echo "Build-tools disponibles:"
+          ls -la $ANDROID_SDK_ROOT/build-tools/ 2>/dev/null || echo "No build-tools aún"
 
-      - name: Build APK
+      - name: Configure buildozer.spec
+        run: |
+          # Forzar rutas específicas en buildozer.spec
+          cat >> buildozer.spec << EOF
+          
+          # Rutas forzadas para CI
+          android.accept_sdk_license = True
+          android.sdk_path = $HOME/.buildozer/android/platform/android-sdk
+          android.ndk_path = $HOME/.buildozer/android/platform/android-ndk-r25b
+          android.skip_update = False
+          android.api = 33
+          android.minapi = 21
+          android.ndk = 25b
+          android.ndk_api = 21
+          EOF
+          
+          echo "Configuración de buildozer.spec:"
+          tail -15 buildozer.spec
+
+      - name: Build APK with pre-configured environment
+        env:
+          ANDROID_SDK_ROOT: ${{ github.workspace }}/../.buildozer/android/platform/android-sdk
+          ANDROID_NDK_HOME: ${{ github.workspace }}/../.buildozer/android/platform/android-ndk-r25b
+          ANDROID_HOME: ${{ github.workspace }}/../.buildozer/android/platform/android-sdk
         run: |
           export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
-          export ANDROIDSDK=$ANDROID_SDK_ROOT
+          export ANDROID_NDK_HOME=$HOME/.buildozer/android/platform/android-ndk-r25b
           export ANDROID_HOME=$ANDROID_SDK_ROOT
+          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
           
+          # Mostrar variables de entorno para debug
+          echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
+          
+          # Ejecutar buildozer
           buildozer -v android debug
 
       - name: Upload APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ReginaMusic-APK
           path: bin/*.apk
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-logs
+          path: .buildozer/android/platform/build-*/
