@@ -32,20 +32,39 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install buildozer cython==0.29.36 virtualenv
 
+      # Paso 1: Forzar la descarga inicial del SDK por parte de Buildozer
       - name: Download Android SDK (Initial setup)
         run: buildozer android update
 
-      - name: Accept Android SDK licenses
+      # Paso 2: Aceptar Licencias utilizando rutas alternativas (¡CLAVE!)
+      - name: Accept Android SDK licenses via sdkmanager
         run: |
           SDK_PATH=$HOME/.buildozer/android/platform/android-sdk
-          yes | "$SDK_PATH/cmdline-tools/latest/bin/sdkmanager" --licenses
+          
+          # Debug: Mostrar el contenido de la carpeta del SDK para verificar la estructura
+          echo "Contenido del SDK_PATH:"
+          ls -R $SDK_PATH
+          
+          # Intenta la ruta de la versión 3.0 (Herramientas antiguas)
+          SDK_MANAGER_PATH_LEGACY="$SDK_PATH/tools/bin/sdkmanager"
+          
+          # Intenta la ruta de la versión 7.0 (Herramientas de línea de comandos modernas)
+          SDK_MANAGER_PATH_NEW="$SDK_PATH/cmdline-tools/latest/bin/sdkmanager"
+          
+          if [ -f "$SDK_MANAGER_PATH_NEW" ]; then
+            echo "Usando la ruta moderna."
+            yes | "$SDK_MANAGER_PATH_NEW" --licenses
+          elif [ -f "$SDK_MANAGER_PATH_LEGACY" ]; then
+            echo "Usando la ruta legacy."
+            yes | "$SDK_MANAGER_PATH_LEGACY" --licenses
+          else
+            echo "Error: sdkmanager no encontrado en las rutas esperadas. No se pudieron aceptar las licencias."
+            # Este 'exit 1' es crucial si no encuentra el sdkmanager.
+            exit 1 
+          fi
 
-      - name: Debug — List files
-        run: |
-          pwd
-          ls -la
-
-      - name: Build APK
+      - name: Build APK (Final successful attempt)
+        # La segunda ejecución debe ser exitosa ya que las licencias están aceptadas
         run: |
           buildozer android debug
 
