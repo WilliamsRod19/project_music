@@ -23,7 +23,6 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt update
-          # Nota: Quitar 'libtinfo5' si Ubuntu 22.04 da error.
           sudo apt install -y python3-pip openjdk-17-jdk unzip zip git \
             libffi-dev libssl-dev autoconf automake libtool pkg-config \
             zlib1g-dev libncurses5-dev libtinfo5
@@ -31,27 +30,20 @@ jobs:
       - name: Install Buildozer
         run: |
           pip install --upgrade pip setuptools wheel
-          # Nota: Se recomienda 'cython==0.29.36'
           pip install buildozer cython==0.29.36 virtualenv
 
-      # --- PASO CLAVE AÑADIDO ---
-      - name: Accept Android SDK licenses 🔑
-        uses: android-actions/setup-android@v3
-        with:
-          # Acepta todas las licencias del SDK necesarias para la compilación.
-          # Esto resuelve el error "The following packages can not be installed since their licenses... were not accepted"
-          licenses: true
-      # ---------------------------
+      - name: Download Android SDK (Initial setup)
+        run: buildozer android update
+
+      - name: Accept Android SDK licenses
+        run: |
+          SDK_PATH=$HOME/.buildozer/android/platform/android-sdk
+          yes | "$SDK_PATH/cmdline-tools/latest/bin/sdkmanager" --licenses
 
       - name: Debug — List files
         run: |
           pwd
           ls -la
-
-      - name: Accept Android SDK Licenses
-        run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager --install "build-tools;34.0.0" "platforms;android-34" "platform-tools"
 
       - name: Build APK
         run: |
