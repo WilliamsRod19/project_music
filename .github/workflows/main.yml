@@ -34,7 +34,6 @@ jobs:
 
       - name: Build APK
         run: |
-          cd ReginaMusic
           buildozer android debug
 
       - name: Upload APK artifact
