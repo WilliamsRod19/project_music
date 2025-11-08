@@ -72,26 +72,54 @@ class SettingsScreen(MDScreen):
             download_folder = "/storage/emulated/0/Download"
             documents_folder = "/storage/emulated/0/Documents"
         
-        # Mostrar diálogo con opciones
+        # Crear un BoxLayout vertical para los botones
+        from kivymd.uix.boxlayout import MDBoxLayout
+        from kivymd.uix.button import MDRaisedButton, MDFlatButton
+        
+        content = MDBoxLayout(
+            orientation='vertical',
+            spacing="12dp",
+            size_hint_y=None,
+            height="200dp"
+        )
+        
+        # Botón Music
+        btn_music = MDRaisedButton(
+            text="Music",
+            size_hint_y=None,
+            height="48dp",
+            on_release=lambda x: self.select_folder_and_close(music_folder)
+        )
+        
+        # Botón Download
+        btn_download = MDRaisedButton(
+            text="Download",
+            size_hint_y=None,
+            height="48dp",
+            on_release=lambda x: self.select_folder_and_close(download_folder)
+        )
+        
+        # Botón Documents
+        btn_documents = MDRaisedButton(
+            text="Documents",
+            size_hint_y=None,
+            height="48dp",
+            on_release=lambda x: self.select_folder_and_close(documents_folder)
+        )
+        
+        content.add_widget(btn_music)
+        content.add_widget(btn_download)
+        content.add_widget(btn_documents)
+        
+        # Mostrar diálogo
         if self.dialog:
             self.dialog.dismiss()
         
         self.dialog = MDDialog(
-            title="Selecciona la carpeta de música",
-            text="Elige dónde quieres que se guarden y se busquen las canciones:",
+            title="Carpeta de música",
+            type="custom",
+            content_cls=content,
             buttons=[
-                MDRaisedButton(
-                    text="📁 Music",
-                    on_release=lambda x: self.select_folder_and_close(music_folder)
-                ),
-                MDRaisedButton(
-                    text="📥 Download",
-                    on_release=lambda x: self.select_folder_and_close(download_folder)
-                ),
-                MDRaisedButton(
-                    text="📄 Documents",
-                    on_release=lambda x: self.select_folder_and_close(documents_folder)
-                ),
                 MDFlatButton(
                     text="CANCELAR",
                     on_release=lambda x: self.dialog.dismiss()
