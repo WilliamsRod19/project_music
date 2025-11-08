@@ -3,3 +3,4 @@ env
 __pycache__
 music_player_config.json
 requirements_normales.txt
+apk/
