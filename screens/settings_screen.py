@@ -15,8 +15,9 @@ if platform == 'android':
         from android import activity, mActivity
         from jnius import autoclass, cast
         ANDROID = True
-    except ImportError:
-        print("⚠️ Módulos de Android no disponibles")
+        print("✅ Módulos de Android cargados correctamente")
+    except ImportError as e:
+        print(f"⚠️ Módulos de Android no disponibles: {e}")
 
 # Importar plyer para Windows/Linux/Mac
 try:
@@ -39,6 +40,7 @@ class SettingsScreen(MDScreen):
         if ANDROID:
             activity.bind(on_activity_result=self.on_activity_result)
             self.request_android_permissions()
+            print(f"📁 Carpeta inicial configurada: {self.music_folder}")
     
     def request_android_permissions(self):
         """Solicitar permisos de almacenamiento en Android."""
@@ -49,10 +51,12 @@ class SettingsScreen(MDScreen):
             ])
             print("✅ Permisos de almacenamiento solicitados")
         except Exception as e:
-            print(f"Error solicitando permisos: {e}")
+            print(f"❌ Error solicitando permisos: {e}")
     
     def open_file_manager(self):
         """Abrir el selector de carpetas según la plataforma."""
+        print(f"🔧 Abriendo selector de carpetas (Android: {ANDROID})")
+        
         if ANDROID:
             self.open_android_folder_picker()
         else:
@@ -61,6 +65,8 @@ class SettingsScreen(MDScreen):
     def open_android_folder_picker(self):
         """Abrir el explorador de archivos nativo de Android (SAF)."""
         try:
+            print("📂 Iniciando Storage Access Framework...")
+            
             Intent = autoclass('android.content.Intent')
             
             # Crear intent para seleccionar carpeta
@@ -74,20 +80,26 @@ class SettingsScreen(MDScreen):
                 # Intentar abrir en la carpeta Music por defecto
                 initial_uri = Uri.parse("content://com.android.externalstorage.documents/tree/primary:Music")
                 intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, initial_uri)
-            except:
-                pass  # Si falla, abrirá en la carpeta raíz
+                print("📍 Carpeta inicial configurada: Music")
+            except Exception as e:
+                print(f"⚠️ No se pudo configurar carpeta inicial: {e}")
             
             # Iniciar el selector
             mActivity.startActivityForResult(intent, 42)
-            print("📂 Abriendo selector de carpetas de Android...")
+            print("✅ Selector de carpetas abierto")
             
         except Exception as e:
-            print(f"Error abriendo selector de Android: {e}")
+            print(f"❌ Error abriendo selector de Android: {e}")
+            import traceback
+            traceback.print_exc()
             self.show_dialog("Error", f"No se pudo abrir el selector:\n{str(e)}")
     
     def on_activity_result(self, request_code, result_code, intent):
         """Callback cuando el usuario selecciona una carpeta en Android."""
+        print(f"📨 Activity result recibido - Code: {request_code}, Result: {result_code}")
+        
         if request_code != 42:
+            print("⏭️ No es nuestro request code, ignorando")
             return
         
         # result_code -1 = RESULT_OK (el usuario seleccionó algo)
@@ -95,62 +107,76 @@ class SettingsScreen(MDScreen):
             try:
                 # Obtener la URI de la carpeta seleccionada
                 tree_uri = intent.getData()
+                uri_string = tree_uri.toString()
                 
-                # Convertir URI a path real
-                path = self.convert_uri_to_path(tree_uri)
+                print(f"📂 URI completo recibido: {uri_string}")
                 
-                if path:
-                    print(f"📁 Carpeta seleccionada: {path}")
-                    self.select_folder(path)
-                else:
-                    # Si no se puede convertir, usar la URI directamente
-                    uri_string = tree_uri.toString()
-                    print(f"📁 URI seleccionada: {uri_string}")
+                # Extraer el path del URI
+                path = None
+                
+                # Caso 1: URIs con "primary:" (almacenamiento interno)
+                if "primary:" in uri_string:
+                    print("🔍 Detectado almacenamiento primario (internal storage)")
                     
-                    # Intentar extraer el path del URI
-                    if "primary:" in uri_string:
-                        parts = uri_string.split("primary:")
+                    # Intentar extraer desde "tree/primary:"
+                    if "/tree/primary:" in uri_string:
+                        parts = uri_string.split("/tree/primary:")
                         if len(parts) > 1:
-                            relative_path = parts[-1].replace("%20", " ").replace("%2F", "/")
+                            relative_path = parts[1].split("/document/")[0]
+                            relative_path = relative_path.replace("%20", " ").replace("%2F", "/")
+                            
                             external_storage = primary_external_storage_path()
                             path = os.path.join(external_storage, relative_path)
-                            print(f"📁 Path extraído: {path}")
-                            self.select_folder(path)
-                        else:
-                            self.show_dialog("Error", "No se pudo determinar la ruta de la carpeta")
+                            print(f"📁 Path extraído (tree): {path}")
+                    
+                    # Si no funcionó, intentar desde "document/primary:"
+                    elif "/document/primary:" in uri_string:
+                        parts = uri_string.split("/document/primary:")
+                        if len(parts) > 1:
+                            relative_path = parts[1].replace("%20", " ").replace("%2F", "/")
+                            
+                            external_storage = primary_external_storage_path()
+                            path = os.path.join(external_storage, relative_path)
+                            print(f"📁 Path extraído (document): {path}")
+                    
+                    # Último intento: buscar cualquier "primary:"
                     else:
-                        self.show_dialog("Error", "No se pudo determinar la ruta de la carpeta")
+                        parts = uri_string.split("primary:")
+                        if len(parts) > 1:
+                            relative_path = parts[-1].split("/")[0]
+                            relative_path = relative_path.replace("%20", " ").replace("%2F", "/")
+                            
+                            external_storage = primary_external_storage_path()
+                            path = os.path.join(external_storage, relative_path)
+                            print(f"📁 Path extraído (genérico): {path}")
+                
+                # Caso 2: URIs con números (tarjetas SD u otros almacenamientos)
+                elif any(char.isdigit() for char in uri_string):
+                    print("💾 Detectado almacenamiento externo (SD card)")
+                    self.show_dialog(
+                        "Almacenamiento externo",
+                        "La carpeta seleccionada está en almacenamiento externo (tarjeta SD).\n\nPor favor selecciona una carpeta del almacenamiento interno."
+                    )
+                    return
+                
+                # Si se obtuvo un path, usarlo
+                if path:
+                    print(f"✅ Path final extraído: {path}")
+                    self.select_folder(path)
+                else:
+                    print(f"❌ No se pudo convertir el URI: {uri_string}")
+                    self.show_dialog(
+                        "No se pudo determinar la ruta",
+                        f"URI recibido:\n{uri_string}\n\nPor favor intenta con otra carpeta."
+                    )
                         
             except Exception as e:
-                print(f"Error procesando carpeta seleccionada: {e}")
+                print(f"❌ Error procesando carpeta seleccionada: {e}")
                 import traceback
                 traceback.print_exc()
                 self.show_dialog("Error", f"Error al procesar la carpeta:\n{str(e)}")
         else:
-            print("❌ Usuario canceló la selección")
-    
-    def convert_uri_to_path(self, uri):
-        """Intentar convertir un URI de Android a un path del sistema de archivos."""
-        try:
-            uri_string = uri.toString()
-            
-            if "primary:" in uri_string:
-                parts = uri_string.split("primary:")
-                if len(parts) > 1:
-                    relative_path = parts[-1]
-                    relative_path = relative_path.split("/document/")[0] if "/document/" in relative_path else relative_path
-                    relative_path = relative_path.replace("%20", " ").replace("%2F", "/")
-                    
-                    external_storage = primary_external_storage_path()
-                    full_path = os.path.join(external_storage, relative_path)
-                    
-                    return full_path
-            
-            return None
-            
-        except Exception as e:
-            print(f"Error convirtiendo URI: {e}")
-            return None
+            print("❌ Usuario canceló la selección o result_code incorrecto")
     
     def open_desktop_file_manager(self):
         """Abrir selector de carpetas para Windows/Linux/Mac."""
@@ -176,24 +202,55 @@ class SettingsScreen(MDScreen):
     
     def select_folder(self, path):
         """Guardar la carpeta seleccionada."""
-        if not os.path.exists(path):
+        print(f"🔄 Intentando seleccionar carpeta: {path}")
+        
+        # Verificar si la carpeta existe
+        exists = os.path.exists(path)
+        is_dir = os.path.isdir(path) if exists else False
+        
+        print(f"   📊 Existe: {exists}")
+        print(f"   📊 Es directorio: {is_dir}")
+        
+        if not exists:
             try:
                 os.makedirs(path)
-                print(f"📁 Carpeta creada: {path}")
+                print(f"✅ Carpeta creada: {path}")
             except Exception as e:
                 print(f"⚠️ No se pudo crear la carpeta: {e}")
         
-        if os.path.exists(path) and not os.path.isdir(path):
+        if exists and not is_dir:
             self.show_dialog("Error", f"La ruta no es una carpeta:\n{path}")
             return
         
+        # Actualizar la propiedad
         self.music_folder = path
+        print(f"🔄 music_folder actualizado a: {self.music_folder}")
         
+        # Guardar en la configuración
         if ConfigManager.set_music_folder(path):
-            print(f"✅ Carpeta de música guardada: {path}")
+            print(f"✅ Carpeta guardada en configuración: {path}")
+            
+            # Recargar la lista de canciones
             self.reload_song_list(path)
-            self.show_dialog("¡Carpeta actualizada!", f"Carpeta de música:\n{path}\n\nLa lista de canciones se ha actualizado.")
+            
+            # Contar archivos
+            try:
+                files = os.listdir(path)
+                audio_files = [f for f in files if f.lower().endswith(('.mp3', '.m4a', '.flac', '.wav', '.ogg'))]
+                print(f"📊 Archivos de audio encontrados: {len(audio_files)}")
+                
+                self.show_dialog(
+                    "¡Carpeta actualizada!", 
+                    f"Carpeta de música:\n{path}\n\n{len(audio_files)} archivo(s) de audio encontrado(s)."
+                )
+            except Exception as e:
+                print(f"⚠️ No se pudo listar archivos: {e}")
+                self.show_dialog(
+                    "¡Carpeta actualizada!", 
+                    f"Carpeta de música:\n{path}"
+                )
         else:
+            print(f"❌ No se pudo guardar en configuración")
             self.show_dialog("Error", "No se pudo guardar la configuración")
     
     def reload_song_list(self, music_folder):
@@ -201,17 +258,22 @@ class SettingsScreen(MDScreen):
         try:
             from utils.file_manager import find_music_files
             
+            print(f"🔄 Buscando canciones en: {music_folder}")
             songs = find_music_files(music_folder)
+            print(f"✅ Canciones encontradas: {len(songs)}")
+            
             song_list_screen = self.manager.get_screen('list')
             song_list_screen.songs = songs
             
             if hasattr(song_list_screen, 'on_pre_enter'):
                 song_list_screen.on_pre_enter()
             
-            print(f"✅ Lista actualizada: {len(songs)} canciones encontradas")
+            print(f"✅ Lista de reproducción actualizada")
             
         except Exception as e:
-            print(f"Error al recargar canciones: {e}")
+            print(f"❌ Error al recargar canciones: {e}")
+            import traceback
+            traceback.print_exc()
     
     def show_dialog(self, title, text):
         """Mostrar un diálogo simple."""
