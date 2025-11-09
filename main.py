@@ -1,5 +1,6 @@
 from kivy.lang import Builder
 from kivymd.app import MDApp
+from kivy.clock import Clock
 from kivy.uix.screenmanager import ScreenManager
 from kivy.utils import platform
 from screens.song_list_screen import SongListScreen
@@ -48,6 +49,6 @@ class MainApp(MDApp):
         # ✅ Pedir permisos aquí, no en build()
         if platform == "android":
             Clock.schedule_once(lambda dt: get_permissions(), 1)
-            
+
 if __name__ == '__main__':
     MainApp().run()
