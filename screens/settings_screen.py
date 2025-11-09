@@ -109,7 +109,10 @@ class SettingsScreen(MDScreen):
                 tree_uri = intent.getData()
                 uri_string = tree_uri.toString()
                 
-                print(f"📂 URI completo recibido: {uri_string}")
+                # Decodificar caracteres especiales (%3A -> :, %2F -> /)
+                uri_string = uri_string.replace("%3A", ":").replace("%2F", "/").replace("%20", " ")
+                
+                print(f"📂 URI decodificado: {uri_string}")
                 
                 # Extraer el path del URI
                 path = None
@@ -123,7 +126,6 @@ class SettingsScreen(MDScreen):
                         parts = uri_string.split("/tree/primary:")
                         if len(parts) > 1:
                             relative_path = parts[1].split("/document/")[0]
-                            relative_path = relative_path.replace("%20", " ").replace("%2F", "/")
                             
                             external_storage = primary_external_storage_path()
                             path = os.path.join(external_storage, relative_path)
@@ -133,7 +135,7 @@ class SettingsScreen(MDScreen):
                     elif "/document/primary:" in uri_string:
                         parts = uri_string.split("/document/primary:")
                         if len(parts) > 1:
-                            relative_path = parts[1].replace("%20", " ").replace("%2F", "/")
+                            relative_path = parts[1]
                             
                             external_storage = primary_external_storage_path()
                             path = os.path.join(external_storage, relative_path)
@@ -144,37 +146,42 @@ class SettingsScreen(MDScreen):
                         parts = uri_string.split("primary:")
                         if len(parts) > 1:
                             relative_path = parts[-1].split("/")[0]
-                            relative_path = relative_path.replace("%20", " ").replace("%2F", "/")
                             
                             external_storage = primary_external_storage_path()
                             path = os.path.join(external_storage, relative_path)
                             print(f"📁 Path extraído (genérico): {path}")
                 
-                # Caso 2: URIs con números (tarjetas SD u otros almacenamientos)
-                elif any(char.isdigit() for char in uri_string):
+                # Caso 2: URIs con números (tarjetas SD)
+                elif any(char.isdigit() for char in uri_string.split(":")[0]):
                     print("💾 Detectado almacenamiento externo (SD card)")
-                    self.show_dialog(
+                    # Usar Clock.schedule_once para mostrar el diálogo en el thread principal
+                    from kivy.clock import Clock
+                    Clock.schedule_once(lambda dt: self.show_dialog(
                         "Almacenamiento externo",
                         "La carpeta seleccionada está en almacenamiento externo (tarjeta SD).\n\nPor favor selecciona una carpeta del almacenamiento interno."
-                    )
+                    ), 0)
                     return
                 
-                # Si se obtuvo un path, usarlo
+                # Si se obtuvo un path, usarlo (desde el thread principal de Kivy)
                 if path:
                     print(f"✅ Path final extraído: {path}")
-                    self.select_folder(path)
+                    # Usar Clock.schedule_once para ejecutar en el thread principal
+                    from kivy.clock import Clock
+                    Clock.schedule_once(lambda dt: self.select_folder(path), 0)
                 else:
                     print(f"❌ No se pudo convertir el URI: {uri_string}")
-                    self.show_dialog(
+                    from kivy.clock import Clock
+                    Clock.schedule_once(lambda dt: self.show_dialog(
                         "No se pudo determinar la ruta",
                         f"URI recibido:\n{uri_string}\n\nPor favor intenta con otra carpeta."
-                    )
+                    ), 0)
                         
             except Exception as e:
                 print(f"❌ Error procesando carpeta seleccionada: {e}")
                 import traceback
                 traceback.print_exc()
-                self.show_dialog("Error", f"Error al procesar la carpeta:\n{str(e)}")
+                from kivy.clock import Clock
+                Clock.schedule_once(lambda dt: self.show_dialog("Error", f"Error al procesar la carpeta:\n{str(e)}"), 0)
         else:
             print("❌ Usuario canceló la selección o result_code incorrecto")
     
