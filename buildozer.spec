@@ -43,7 +43,7 @@ version = 1.0
 requirements = python3, kivy, kivymd, plyer, ffpyplayer, pillow, requests, mutagen, yt-dlp
 
 #permisos
-android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, INTERNET
+android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, INTERNET, MANAGE_EXTERNAL_STORAGE
 
 
 # (str) Custom source folders for requirements
