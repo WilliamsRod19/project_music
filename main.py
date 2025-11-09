@@ -1,16 +1,22 @@
 from kivy.lang import Builder
 from kivymd.app import MDApp
 from kivy.uix.screenmanager import ScreenManager
+from kivy.utils import platform
 from screens.song_list_screen import SongListScreen
 from screens.player_screen import PlayerScreen
 from screens.settings_screen import SettingsScreen
 from screens.downloader_screen import DownloaderScreen
 from utils.file_manager import find_music_files
 from utils.config_manager import ConfigManager
+from utils.config_permissions import get_permissions
 import os
 
 class MainApp(MDApp):
     def build(self):
+        #solicitar permisos en Android
+        if platform == "android":
+            get_permissions()
+
         # Cargar tema desde la configuración
         theme_config = ConfigManager.get_theme()
         self.theme_cls.theme_style = theme_config['theme_style']
@@ -38,5 +44,10 @@ class MainApp(MDApp):
         sm.current = 'list'
         return sm
 
+    def on_start(self):
+        # ✅ Pedir permisos aquí, no en build()
+        if platform == "android":
+            Clock.schedule_once(lambda dt: get_permissions(), 1)
+            
 if __name__ == '__main__':
     MainApp().run()
